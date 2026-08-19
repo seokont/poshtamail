@@ -1,0 +1,62 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearNuxtData } from '#app'
+import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
+import IndexPage from '../app/pages/index.vue'
+
+const { from, mailboxOrder, messageEq, messageOrder, messageLimit } = vi.hoisted(() => ({
+  from: vi.fn(),
+  mailboxOrder: vi.fn(),
+  messageEq: vi.fn(),
+  messageOrder: vi.fn(),
+  messageLimit: vi.fn()
+}))
+
+mockNuxtImport('useSupabaseClient', () => {
+  return () => ({ from })
+})
+mockNuxtImport('useMailRealtime', () => vi.fn())
+
+describe('index page (inbox)', () => {
+  beforeEach(() => {
+    clearNuxtData('inbox-messages')
+    mailboxOrder.mockResolvedValue({
+      data: [{ id: 'mb-1', email: 'inbox1@example.com' }],
+      error: null
+    })
+    messageEq.mockReturnValue({ order: messageOrder })
+    messageOrder.mockReturnValue({ limit: messageLimit })
+    from.mockImplementation((table: string) => {
+      if (table === 'mailboxes') {
+        return { select: () => ({ order: mailboxOrder }) }
+      }
+      if (table === 'messages') {
+        return { select: () => ({ eq: messageEq }) }
+      }
+      throw new Error('unexpected table ' + table)
+    })
+  })
+
+  it('renders the fetched messages', async () => {
+    messageLimit.mockResolvedValue({
+      data: [
+        { id: 'm1', mailbox_id: 'mb-1', from_addr: 'a@example.com', subject: 'First', received_at: '2026-08-19', is_read: false },
+        { id: 'm2', mailbox_id: 'mb-1', from_addr: 'b@example.com', subject: 'Second', received_at: '2026-08-18', is_read: true }
+      ],
+      error: null
+    })
+
+    const wrapper = await mountSuspended(IndexPage)
+
+    expect(wrapper.text()).toContain('First')
+    expect(wrapper.text()).toContain('Second')
+    expect(wrapper.findAll('a').some(link => link.attributes('href') === '/mail/m1')).toBe(true)
+  })
+
+  it('shows an empty state when there are no messages', async () => {
+    messageLimit.mockResolvedValue({ data: [], error: null })
+
+    const wrapper = await mountSuspended(IndexPage)
+
+    expect(wrapper.text()).toContain('Your inbox is empty')
+  })
+})

@@ -1,0 +1,40 @@
+{
+  "name": "mail-client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxi typecheck",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.33.0",
+    "@nuxtjs/supabase": "^1.4.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "imapflow": "^1.0.0",
+    "mailparser": "3.9.15",
+    "nodemailer": "^9.0.5",
+    "nuxt": "^4.0.0",
+    "sanitize-html": "^2.17.0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@nuxt/test-utils": "^4.0.0",
+    "@types/mailparser": "^3.4.0",
+    "@types/node": "^22.0.0",
+    "@types/nodemailer": "^8.0.1",
+    "@types/sanitize-html": "^2.16.0",
+    "@vue/test-utils": "^2.4.0",
+    "happy-dom": "^20.0.11",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.2",
+    "vue-tsc": "^3.3.10"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.1"
+  }
+}
