@@ -47,10 +47,10 @@ in managed Postgres instead of the ephemeral Vercel filesystem.
 
 This is the main platform constraint:
 
-| Vercel plan | Minimum cron interval | Scheduling precision |
-|---|---:|---:|
-| Hobby | Once per day | Within the scheduled hour |
-| Pro | Once per minute | Minute-level |
+| Vercel plan | Minimum cron interval |      Scheduling precision |
+| ----------- | --------------------: | ------------------------: |
+| Hobby       |          Once per day | Within the scheduled hour |
+| Pro         |       Once per minute |              Minute-level |
 
 A Hobby deployment cannot include a Vercel cron schedule that runs more than
 once per day. For useful mail delivery, choose one of these approaches:
@@ -170,36 +170,40 @@ text.
    the decrypted value.
 
 ```ts
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 function getKey() {
-  const hex = process.env.MAIL_ENCRYPTION_KEY
-  if (!hex) throw new Error('MAIL_ENCRYPTION_KEY must be set')
+  const hex = process.env.MAIL_ENCRYPTION_KEY;
+  if (!hex) throw new Error("MAIL_ENCRYPTION_KEY must be set");
 
-  const key = Buffer.from(hex, 'hex')
+  const key = Buffer.from(hex, "hex");
   if (key.length !== 32) {
-    throw new Error('MAIL_ENCRYPTION_KEY must be 32 bytes')
+    throw new Error("MAIL_ENCRYPTION_KEY must be 32 bytes");
   }
-  return key
+  return key;
 }
 
 export function encrypt(text: string) {
-  const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-256-gcm', getKey(), iv)
-  const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()])
-  const tag = cipher.getAuthTag()
-  return Buffer.concat([iv, tag, encrypted]).toString('base64')
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", getKey(), iv);
+  const encrypted = Buffer.concat([
+    cipher.update(text, "utf8"),
+    cipher.final(),
+  ]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, encrypted]).toString("base64");
 }
 
 export function decrypt(payload: string) {
-  const buffer = Buffer.from(payload, 'base64')
-  const iv = buffer.subarray(0, 12)
-  const tag = buffer.subarray(12, 28)
-  const encrypted = buffer.subarray(28)
-  const decipher = createDecipheriv('aes-256-gcm', getKey(), iv)
-  decipher.setAuthTag(tag)
-  return Buffer.concat([decipher.update(encrypted), decipher.final()])
-    .toString('utf8')
+  const buffer = Buffer.from(payload, "base64");
+  const iv = buffer.subarray(0, 12);
+  const tag = buffer.subarray(12, 28);
+  const encrypted = buffer.subarray(28);
+  const decipher = createDecipheriv("aes-256-gcm", getKey(), iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString(
+    "utf8",
+  );
 }
 ```
 
@@ -251,9 +255,7 @@ The cron configuration is:
 
 ```json
 {
-  "crons": [
-    { "path": "/api/cron/sync", "schedule": "*/5 * * * *" }
-  ]
+  "crons": [{ "path": "/api/cron/sync", "schedule": "0 8 * * *" }]
 }
 ```
 
@@ -281,17 +283,17 @@ const transporter = nodemailer.createTransport({
   secure: mailbox.smtp_port === 465,
   auth: {
     user: mailbox.email,
-    pass: decrypt(mailbox.smtp_password_encrypted)
-  }
-})
+    pass: decrypt(mailbox.smtp_password_encrypted),
+  },
+});
 
 await transporter.sendMail({
   from: mailbox.email,
   to,
   subject,
   text,
-  html
-})
+  html,
+});
 ```
 
 The endpoint limits field sizes and requires a non-empty text or HTML body.
@@ -311,29 +313,29 @@ const client = new ImapFlow({
   secure: true,
   auth: {
     user: mailbox.email,
-    pass: decrypt(mailbox.imap_password_encrypted)
+    pass: decrypt(mailbox.imap_password_encrypted),
   },
-  logger: false
-})
+  logger: false,
+});
 
-await client.connect()
-const lock = await client.getMailboxLock('INBOX')
+await client.connect();
+const lock = await client.getMailboxLock("INBOX");
 
 try {
-  const range = `${mailbox.last_uid_seen + 1}:*`
+  const range = `${mailbox.last_uid_seen + 1}:*`;
 
   for await (const item of client.fetch(
     range,
     { envelope: true, source: true, uid: true },
-    { uid: true }
+    { uid: true },
   )) {
-    if (!item.source || item.uid <= mailbox.last_uid_seen) continue
-    const parsed = await simpleParser(item.source)
+    if (!item.source || item.uid <= mailbox.last_uid_seen) continue;
+    const parsed = await simpleParser(item.source);
     // Upsert the message, then upload and upsert its attachments.
   }
 } finally {
-  lock.release()
-  await client.logout()
+  lock.release();
+  await client.logout();
 }
 ```
 
@@ -359,20 +361,20 @@ browser sessions. RLS still applies to these events.
 
 ```ts
 const channel = supabase
-  .channel('inbox-updates')
+  .channel("inbox-updates")
   .on(
-    'postgres_changes',
-    { event: 'INSERT', schema: 'public', table: 'messages' },
-    payload => {
-      if (payload.new.mailbox_id !== selectedMailboxId.value) return
-      messages.value = [payload.new, ...messages.value]
-    }
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "messages" },
+    (payload) => {
+      if (payload.new.mailbox_id !== selectedMailboxId.value) return;
+      messages.value = [payload.new, ...messages.value];
+    },
   )
-  .subscribe()
+  .subscribe();
 
 onScopeDispose(() => {
-  supabase.removeChannel(channel)
-})
+  supabase.removeChannel(channel);
+});
 ```
 
 The implementation filters events by the currently selected mailbox and
@@ -387,15 +389,15 @@ resolution, and redirect middleware.
 
 ```ts
 export default defineNuxtConfig({
-  modules: ['@nuxtjs/supabase'],
+  modules: ["@nuxtjs/supabase"],
   supabase: {
     redirectOptions: {
-      login: '/login',
-      callback: '/confirm',
-      exclude: ['/login', '/confirm']
-    }
-  }
-})
+      login: "/login",
+      callback: "/confirm",
+      exclude: ["/login", "/confirm"],
+    },
+  },
+});
 ```
 
 Public sign-up should be disabled for a small team installation. Create users
@@ -419,13 +421,13 @@ MAIL_ENCRYPTION_KEY=
 CRON_SECRET=
 ```
 
-| Variable | Exposure | Purpose |
-|---|---|---|
-| `SUPABASE_URL` | Client and server | Supabase project URL |
-| `SUPABASE_ANON_KEY` | Client and server | Public key restricted by RLS |
-| `SUPABASE_SERVICE_ROLE_KEY` | Server only | Administrative database and Storage access |
-| `MAIL_ENCRYPTION_KEY` | Server only | 32-byte AES key encoded as 64 hex characters |
-| `CRON_SECRET` | Server only | Protects the IMAP sync endpoint |
+| Variable                    | Exposure          | Purpose                                      |
+| --------------------------- | ----------------- | -------------------------------------------- |
+| `SUPABASE_URL`              | Client and server | Supabase project URL                         |
+| `SUPABASE_ANON_KEY`         | Client and server | Public key restricted by RLS                 |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server only       | Administrative database and Storage access   |
+| `MAIL_ENCRYPTION_KEY`       | Server only       | 32-byte AES key encoded as 64 hex characters |
+| `CRON_SECRET`               | Server only       | Protects the IMAP sync endpoint              |
 
 Never prefix the service role or encryption key with `NUXT_PUBLIC_`.
 
