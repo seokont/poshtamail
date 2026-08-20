@@ -156,6 +156,7 @@ async function sendMessage() {
           <label class="field">
             <span class="field-label">Message</span>
             <div
+v-model:html="body" required role=\"textbox\" aria-multiline=\"true\"></div>
 <div class="field-control message-field contenteditable" @input="body = $event.target.innerHTML" required role=\"textbox\" aria-multiline=\"true\"></div>
 @input="handleContentChange" required role=\"textbox\" aria-multiline=\"true\"></div>
               v-model="body"
@@ -301,6 +302,11 @@ async function sendMessage() {
     border-radius: 8px 8px 0 0;
   }
 
+// handleContentChange method is no longer needed due to v-model:html directive
+// function handleContentChange(event: Event) {
+//   const target = event.target as HTMLElement;
+//   body.value = target.innerHTML;
+// }
   .message-field {
 function handleContentChange(event: Event) {
   const target = event.target as HTMLElement;
