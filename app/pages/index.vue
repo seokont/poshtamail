@@ -6,6 +6,8 @@ const supabase = useSupabaseClient<any>()
 const { mailboxes, selectedMailboxId, loading: mailboxesLoading, error: mailboxesError } = await useMailboxes()
 const messages = ref<MailMessage[]>([])
 const search = ref('')
+const syncing = ref(false)
+const syncError = ref('')
 
 const { data, pending, error, refresh } = await useAsyncData('inbox-messages', async () => {
   if (!selectedMailboxId.value) return []
@@ -63,6 +65,24 @@ function formatDate(value: string | null) {
     ? { hour: '2-digit', minute: '2-digit' }
     : { day: 'numeric', month: 'short' }).format(date)
 }
+
+async function syncMessages() {
+  if (!selectedMailboxId.value || syncing.value) return
+
+  syncing.value = true
+  syncError.value = ''
+  try {
+    await $fetch('/api/mail/sync', {
+      method: 'POST',
+      body: { mailboxId: selectedMailboxId.value }
+    })
+    await refresh()
+  } catch (cause: any) {
+    syncError.value = cause?.data?.statusMessage || cause?.message || 'Could not sync the mailbox'
+  } finally {
+    syncing.value = false
+  }
+}
 </script>
 
 <template>
@@ -84,8 +104,9 @@ function formatDate(value: string | null) {
             </option>
           </select>
         </label>
-        <button class='icon-button' type='button' title='Refresh' aria-label='Refresh' :disabled='pending' @click='refresh()'>
-          <RefreshCw :size='18' :class='{ spin: pending }' />
+        <button class='icon-button' type='button' title='Refresh' aria-label='Refresh' :disabled='pending || syncing' @click='syncMessages'>
+          <LoaderCircle v-if='syncing' :size='18' class='spin' />
+          <RefreshCw v-else :size='18' />
         </button>
       </div>
     </header>
@@ -98,6 +119,8 @@ function formatDate(value: string | null) {
       </label>
       <span class='message-total'>{{ filteredMessages.length }} {{ filteredMessages.length === 1 ? 'message' : 'messages' }}</span>
     </div>
+
+    <p v-if='syncError' class='sync-error' role='alert'>{{ syncError }}</p>
 
     <section v-if='mailboxesError' class='state-panel error-state' role='alert'>
       <AlertCircle :size='28' />
@@ -128,7 +151,7 @@ function formatDate(value: string | null) {
     <section v-else-if='filteredMessages.length === 0' class='state-panel empty-state'>
       <span class='empty-icon'><Inbox :size='28' /></span>
       <strong>{{ search ? 'No results found' : 'Your inbox is empty' }}</strong>
-      <p>{{ search ? 'Try a different search.' : 'New messages will appear here after the next sync.' }}</p>
+      <p>{{ search ? 'Try a different search.' : 'Use Refresh to check for new messages.' }}</p>
     </section>
 
     <ul v-else class='message-list'>
@@ -254,6 +277,15 @@ function formatDate(value: string | null) {
 .message-total {
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+.sync-error {
+  margin: 0;
+  padding: 10px 32px;
+  border-bottom: 1px solid #fecaca;
+  background: #fff1f2;
+  color: var(--danger);
+  font-size: 13px;
 }
 
 .message-list {
@@ -460,6 +492,10 @@ a.message-row:hover {
   .mail-toolbar {
     min-height: 58px;
     padding: 9px 16px;
+  }
+
+  .sync-error {
+    padding-inline: 16px;
   }
 
   .search-box {

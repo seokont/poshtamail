@@ -3,22 +3,25 @@ import { clearNuxtData } from '#app'
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import IndexPage from '../app/pages/index.vue'
 
-const { from, mailboxOrder, messageEq, messageOrder, messageLimit } = vi.hoisted(() => ({
+const { from, mailboxOrder, messageEq, messageOrder, messageLimit, fetchMock } = vi.hoisted(() => ({
   from: vi.fn(),
   mailboxOrder: vi.fn(),
   messageEq: vi.fn(),
   messageOrder: vi.fn(),
-  messageLimit: vi.fn()
+  messageLimit: vi.fn(),
+  fetchMock: vi.fn()
 }))
 
 mockNuxtImport('useSupabaseClient', () => {
   return () => ({ from })
 })
 mockNuxtImport('useMailRealtime', () => vi.fn())
+mockNuxtImport('$fetch', () => fetchMock)
 
 describe('index page (inbox)', () => {
   beforeEach(() => {
     clearNuxtData('inbox-messages')
+    fetchMock.mockReset().mockResolvedValue({ ok: true })
     mailboxOrder.mockResolvedValue({
       data: [{ id: 'mb-1', email: 'inbox1@example.com' }],
       error: null
@@ -58,5 +61,18 @@ describe('index page (inbox)', () => {
     const wrapper = await mountSuspended(IndexPage)
 
     expect(wrapper.text()).toContain('Your inbox is empty')
+  })
+
+  it('syncs the selected mailbox when Refresh is clicked', async () => {
+    messageLimit.mockResolvedValue({ data: [], error: null })
+    const wrapper = await mountSuspended(IndexPage)
+
+    await wrapper.get('button[aria-label=Refresh]').trigger('click')
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/mail/sync', {
+      method: 'POST',
+      body: { mailboxId: 'mb-1' }
+    })
   })
 })

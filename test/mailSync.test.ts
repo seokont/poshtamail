@@ -43,10 +43,20 @@ vi.mock('mailparser', () => ({
 import { syncAllMailboxes } from '../server/utils/mailSync'
 
 function fakeAdmin() {
-  const upsertSingle = vi.fn().mockResolvedValue({ data: { id: 'msg-1' }, error: null })
-  const upsertSelect = vi.fn(() => ({ single: upsertSingle }))
-  const upsert = vi.fn(() => ({ select: upsertSelect }))
-  const attachmentUpsert = vi.fn().mockResolvedValue({ data: null, error: null })
+  const messageSelectLimit = vi.fn().mockResolvedValue({ data: [], error: null })
+  const messageSelectUid = vi.fn(() => ({ limit: messageSelectLimit }))
+  const messageSelectFolder = vi.fn(() => ({ eq: messageSelectUid }))
+  const messageSelectMailbox = vi.fn(() => ({ eq: messageSelectFolder }))
+  const messageSelect = vi.fn(() => ({ eq: messageSelectMailbox }))
+  const messageInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'msg-1' }, error: null })
+  const messageInsertSelect = vi.fn(() => ({ single: messageInsertSingle }))
+  const messageInsert = vi.fn(() => ({ select: messageInsertSelect }))
+
+  const attachmentSelectLimit = vi.fn().mockResolvedValue({ data: [], error: null })
+  const attachmentSelectPath = vi.fn(() => ({ limit: attachmentSelectLimit }))
+  const attachmentSelectMessage = vi.fn(() => ({ eq: attachmentSelectPath }))
+  const attachmentSelect = vi.fn(() => ({ eq: attachmentSelectMessage }))
+  const attachmentInsert = vi.fn().mockResolvedValue({ data: null, error: null })
   const updateEq = vi.fn().mockResolvedValue({ data: null, error: null })
   const update = vi.fn(() => ({ eq: updateEq }))
 
@@ -74,8 +84,8 @@ function fakeAdmin() {
   const from = vi.fn((table: string) => {
     if (table === 'mailboxes') return { select: mailboxesSelect, update }
     if (table === 'folders') return { select: folderSelect }
-    if (table === 'messages') return { upsert }
-    if (table === 'attachments') return { upsert: attachmentUpsert }
+    if (table === 'messages') return { select: messageSelect, insert: messageInsert }
+    if (table === 'attachments') return { select: attachmentSelect, insert: attachmentInsert }
     throw new Error(`unexpected table ${table}`)
   })
 
@@ -87,7 +97,7 @@ describe('syncAllMailboxes', () => {
     fetchMock.mockClear()
   })
 
-  it('fetches only UIDs above last_uid_seen, upserts the message, uploads the attachment, and advances last_uid_seen', async () => {
+  it('fetches only UIDs above last_uid_seen, saves the message and attachment, and advances last_uid_seen', async () => {
     const admin = fakeAdmin()
     const decrypt = vi.fn().mockReturnValue('plain-password')
 
@@ -96,15 +106,12 @@ describe('syncAllMailboxes', () => {
     expect(result).toEqual({ ok: true, synced: 1 })
     expect(decrypt).toHaveBeenCalledWith('cipher')
     expect(fetchMock).toHaveBeenCalledWith('101:*', { envelope: true, source: true, uid: true }, { uid: true })
-    expect(admin.from('messages').upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        mailbox_id: 'mb-1',
-        folder_id: 'folder-1',
-        imap_uid: 101,
-        subject: 'Hello'
-      }),
-      { onConflict: 'mailbox_id,folder_id,imap_uid' }
-    )
+    expect(admin.from('messages').insert).toHaveBeenCalledWith(expect.objectContaining({
+      mailbox_id: 'mb-1',
+      folder_id: 'folder-1',
+      imap_uid: 101,
+      subject: 'Hello'
+    }))
     expect(admin.from('mailboxes').update).toHaveBeenCalledWith({ last_uid_seen: 101 })
   })
 })

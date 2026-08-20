@@ -31,6 +31,48 @@ function getAttachmentName(filename: string | undefined, index: number): string 
   return `${index + 1}-${cleaned || fallback}`
 }
 
+async function saveMessage(
+  admin: SupabaseClient,
+  values: Record<string, unknown>
+): Promise<string> {
+  const { data: existing, error: selectErr } = await admin
+    .from('messages')
+    .select('id')
+    .eq('mailbox_id', values.mailbox_id)
+    .eq('folder_id', values.folder_id)
+    .eq('imap_uid', values.imap_uid)
+    .limit(1)
+  if (selectErr) throw new Error(selectErr.message)
+
+  const existingId = existing?.[0]?.id
+  const query = existingId
+    ? admin.from('messages').update(values).eq('id', existingId)
+    : admin.from('messages').insert(values)
+  const { data: saved, error: saveErr } = await query.select('id').single()
+  if (saveErr || !saved) throw new Error(saveErr?.message || 'Could not save the message')
+
+  return saved.id
+}
+
+async function saveAttachment(
+  admin: SupabaseClient,
+  values: Record<string, unknown>
+): Promise<void> {
+  const { data: existing, error: selectErr } = await admin
+    .from('attachments')
+    .select('id')
+    .eq('message_id', values.message_id)
+    .eq('storage_path', values.storage_path)
+    .limit(1)
+  if (selectErr) throw new Error(selectErr.message)
+
+  const existingId = existing?.[0]?.id
+  const { error: saveErr } = existingId
+    ? await admin.from('attachments').update(values).eq('id', existingId)
+    : await admin.from('attachments').insert(values)
+  if (saveErr) throw new Error(saveErr.message)
+}
+
 export async function syncAllMailboxes(
   admin: SupabaseClient,
   decrypt: (payload: string) => string
@@ -69,24 +111,18 @@ export async function syncMailbox(
         if (!msg.source) continue
         const parsed = await simpleParser(msg.source)
 
-        const { data: inserted, error: upsertErr } = await admin
-          .from('messages')
-          .upsert({
-            mailbox_id: mailbox.id,
-            folder_id: folderId,
-            imap_uid: msg.uid,
-            message_id: parsed.messageId,
-            from_addr: parsed.from?.text,
-            to_addrs: getRecipientAddresses(parsed.to),
-            subject: parsed.subject,
-            body_text: parsed.text,
-            body_html: parsed.html || null,
-            received_at: parsed.date
-          }, { onConflict: 'mailbox_id,folder_id,imap_uid' })
-          .select('id')
-          .single()
-
-        if (upsertErr) throw new Error(upsertErr.message)
+        const messageId = await saveMessage(admin, {
+          mailbox_id: mailbox.id,
+          folder_id: folderId,
+          imap_uid: msg.uid,
+          message_id: parsed.messageId,
+          from_addr: parsed.from?.text,
+          to_addrs: getRecipientAddresses(parsed.to),
+          subject: parsed.subject,
+          body_text: parsed.text,
+          body_html: parsed.html || null,
+          received_at: parsed.date
+        })
 
         for (const [index, att] of (parsed.attachments ?? []).entries()) {
           const filename = getAttachmentName(att.filename, index)
@@ -97,16 +133,13 @@ export async function syncMailbox(
           })
           if (uploadErr) throw new Error(uploadErr.message)
 
-          const { error: attachInsertErr } = await admin
-            .from('attachments')
-            .upsert({
-              message_id: inserted.id,
-              filename: att.filename || filename,
-              content_type: att.contentType,
-              storage_path: path,
-              size_bytes: att.size
-            }, { onConflict: 'message_id,storage_path' })
-          if (attachInsertErr) throw new Error(attachInsertErr.message)
+          await saveAttachment(admin, {
+            message_id: messageId,
+            filename: att.filename || filename,
+            content_type: att.contentType,
+            storage_path: path,
+            size_bytes: att.size
+          })
         }
 
         maxUid = Math.max(maxUid, msg.uid)
