@@ -3,10 +3,11 @@ import { clearNuxtData } from '#app'
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import IndexPage from '../app/pages/index.vue'
 
-const { from, mailboxOrder, messageEq, messageOrder, messageLimit, fetchMock } = vi.hoisted(() => ({
+const { from, mailboxOrder, messageEq, messageFolderEq, messageOrder, messageLimit, fetchMock } = vi.hoisted(() => ({
   from: vi.fn(),
   mailboxOrder: vi.fn(),
   messageEq: vi.fn(),
+  messageFolderEq: vi.fn(),
   messageOrder: vi.fn(),
   messageLimit: vi.fn(),
   fetchMock: vi.fn()
@@ -26,7 +27,8 @@ describe('index page (inbox)', () => {
       data: [{ id: 'mb-1', email: 'inbox1@example.com' }],
       error: null
     })
-    messageEq.mockReturnValue({ order: messageOrder })
+    messageEq.mockReturnValue({ eq: messageFolderEq })
+    messageFolderEq.mockReturnValue({ order: messageOrder })
     messageOrder.mockReturnValue({ limit: messageLimit })
     from.mockImplementation((table: string) => {
       if (table === 'mailboxes') {

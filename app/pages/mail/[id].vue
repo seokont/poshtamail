@@ -1,5 +1,5 @@
 <script setup lang='ts'>
-import { AlertCircle, ArrowLeft, Download, LoaderCircle, MailOpen, Paperclip, Reply, Send, X } from '@lucide/vue'
+import { AlertCircle, ArrowLeft, Download, LoaderCircle, MailOpen, Paperclip, Reply, Send, Trash2, X } from '@lucide/vue'
 import sanitizeHtml from 'sanitize-html'
 
 interface MessageDetail {
@@ -69,6 +69,8 @@ const replyBody = ref('')
 const sending = ref(false)
 const sendError = ref('')
 const sent = ref(false)
+const deleting = ref(false)
+const deleteError = ref('')
 
 function emailAddress(value: string | null) {
   if (!value) return ''
@@ -140,6 +142,22 @@ async function sendReply() {
   }
 }
 
+async function moveToTrash() {
+  if (!message.value || deleting.value) return
+  if (!confirm('Move this message to Trash?')) return
+
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await $fetch('/api/mail/' + messageId, { method: 'DELETE' })
+    await navigateTo('/')
+  } catch (cause: any) {
+    deleteError.value = cause?.data?.statusMessage || cause?.message || 'Could not move the message to Trash'
+  } finally {
+    deleting.value = false
+  }
+}
+
 function attachmentUrl(attachmentId: string) {
   return '/api/attachments/' + attachmentId + '/download'
 }
@@ -152,11 +170,20 @@ function attachmentUrl(attachmentId: string) {
         <ArrowLeft :size='18' />
         <span>Inbox</span>
       </NuxtLink>
-      <button v-if='message' class='secondary-button' type='button' @click='startReply'>
-        <Reply :size='17' />
-        Reply
-      </button>
+      <div v-if='message' class='toolbar-actions'>
+        <button class='secondary-button delete-button' type='button' title='Move to Trash' aria-label='Move to Trash' :disabled='deleting' @click='moveToTrash'>
+          <LoaderCircle v-if='deleting' class='spin' :size='17' />
+          <Trash2 v-else :size='17' />
+          {{ deleting ? 'Moving' : 'Delete' }}
+        </button>
+        <button class='secondary-button' type='button' aria-label='Reply' :disabled='deleting' @click='startReply'>
+          <Reply :size='17' />
+          Reply
+        </button>
+      </div>
     </header>
+
+    <p v-if='deleteError' class='delete-error' role='alert'>{{ deleteError }}</p>
 
     <section v-if='pending' class='message-state'>
       <LoaderCircle class='spin' :size='27' />
@@ -275,6 +302,30 @@ function attachmentUrl(attachmentId: string) {
 
 .back-link:hover {
   color: var(--text);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.delete-button {
+  color: var(--danger);
+}
+
+.delete-button:hover {
+  border-color: #f3b5bd;
+  background: var(--danger-soft);
+}
+
+.delete-error {
+  margin: 0;
+  padding: 10px 28px;
+  border-bottom: 1px solid #fecaca;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
 }
 
 .message-state {
@@ -544,6 +595,15 @@ function attachmentUrl(attachmentId: string) {
   .message-toolbar {
     min-height: 56px;
     padding: 8px 14px;
+  }
+
+  .message-toolbar .secondary-button {
+    min-width: 40px;
+    padding-inline: 10px;
+  }
+
+  .delete-error {
+    padding-inline: 14px;
   }
 
   .message-content {

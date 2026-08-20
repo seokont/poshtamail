@@ -1,17 +1,22 @@
 // test/mail-id.page.test.ts
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import MailDetailPage from '../app/pages/mail/[id].vue'
 
 // mockNuxtImport rewrites into a hoisted vi.mock() call, so the values its
 // factory closes over must be declared via vi.hoisted() — a plain top-level
 // const here throws "Cannot access '...' before initialization" (TDZ).
-const { fetchMock } = vi.hoisted(() => ({
-  fetchMock: vi.fn().mockResolvedValue({ ok: true })
+const { fetchMock, navigateToMock, confirmMock } = vi.hoisted(() => ({
+  fetchMock: vi.fn().mockResolvedValue({ ok: true }),
+  navigateToMock: vi.fn(),
+  confirmMock: vi.fn().mockReturnValue(true)
 }))
+
+vi.stubGlobal('confirm', confirmMock)
 
 mockNuxtImport('useRoute', () => () => ({ params: { id: 'm1' } }))
 mockNuxtImport('$fetch', () => fetchMock)
+mockNuxtImport('navigateTo', () => navigateToMock)
 mockNuxtImport('useSupabaseClient', () => {
   return () => ({
     from: vi.fn((table: string) => {
@@ -47,6 +52,12 @@ mockNuxtImport('useSupabaseClient', () => {
 })
 
 describe('mail detail page', () => {
+  beforeEach(() => {
+    fetchMock.mockClear()
+    navigateToMock.mockClear()
+    confirmMock.mockClear().mockReturnValue(true)
+  })
+
   it('renders the message subject and body', async () => {
     const wrapper = await mountSuspended(MailDetailPage)
     expect(wrapper.text()).toContain('Hello there')
@@ -55,7 +66,7 @@ describe('mail detail page', () => {
 
   it('sends a reply via /api/mail/send', async () => {
     const wrapper = await mountSuspended(MailDetailPage)
-    await wrapper.find('button').trigger('click') // Reply
+    await wrapper.get('button[aria-label="Reply"]').trigger('click')
     await wrapper.find('textarea').setValue('My reply')
     await wrapper.find('form').trigger('submit.prevent')
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -64,5 +75,16 @@ describe('mail detail page', () => {
       method: 'POST',
       body: expect.objectContaining({ mailboxId: 'mb-1', text: 'My reply' })
     }))
+  })
+
+  it('moves the message to Trash after confirmation', async () => {
+    const wrapper = await mountSuspended(MailDetailPage)
+
+    await wrapper.get('button[aria-label="Move to Trash"]').trigger('click')
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(confirmMock).toHaveBeenCalledWith('Move this message to Trash?')
+    expect(fetchMock).toHaveBeenCalledWith('/api/mail/m1', { method: 'DELETE' })
+    expect(navigateToMock).toHaveBeenCalledWith('/')
   })
 })

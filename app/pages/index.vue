@@ -14,8 +14,9 @@ const { data, pending, error, refresh } = await useAsyncData('inbox-messages', a
 
   const { data: rows, error: fetchError } = await supabase
     .from('messages')
-    .select('id, mailbox_id, subject, from_addr, received_at, is_read')
+    .select('id, mailbox_id, subject, from_addr, received_at, is_read, folders!inner(name)')
     .eq('mailbox_id', selectedMailboxId.value)
+    .eq('folders.name', 'INBOX')
     .order('received_at', { ascending: false })
     .limit(100)
   if (fetchError) throw fetchError
