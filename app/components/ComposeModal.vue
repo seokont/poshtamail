@@ -1,133 +1,192 @@
-<script setup lang='ts'>
-import { Check, LoaderCircle, Send, X } from '@lucide/vue'
-import type { MailboxSummary } from '~/composables/useMailboxes'
+<script setup lang="ts">
+import { Check, LoaderCircle, Send, X } from "@lucide/vue";
+import type { MailboxSummary } from "~/composables/useMailboxes";
 
 const props = defineProps<{
-  open: boolean
-  mailboxes: MailboxSummary[]
-  selectedMailboxId: string | null
-}>()
+  open: boolean;
+  mailboxes: MailboxSummary[];
+  selectedMailboxId: string | null;
+}>();
 
 const emit = defineEmits<{
-  close: []
-  sent: []
-  'update:selectedMailboxId': [value: string]
-}>()
+  close: [];
+  sent: [];
+  "update:selectedMailboxId": [value: string];
+}>();
 
-const to = ref('')
-const subject = ref('')
-const body = ref('')
-const sending = ref(false)
-const sendError = ref('')
-const sent = ref(false)
-const toInput = ref<HTMLInputElement | null>(null)
+const to = ref("");
+const subject = ref("");
+const body = ref("");
+const sending = ref(false);
+const sendError = ref("");
+const sent = ref(false);
+const toInput = ref<HTMLInputElement | null>(null);
 
-watch(() => props.open, async (isOpen) => {
-  if (!isOpen) return
-  sendError.value = ''
-  sent.value = false
-  await nextTick()
-  toInput.value?.focus()
-})
+watch(
+  () => props.open,
+  async (isOpen) => {
+    if (!isOpen) return;
+    sendError.value = "";
+    sent.value = false;
+    await nextTick();
+    toInput.value?.focus();
+  },
+);
 
 function close() {
-  if (!sending.value) emit('close')
+  if (!sending.value) emit("close");
 }
 
 function selectMailbox(event: Event) {
-  emit('update:selectedMailboxId', (event.target as HTMLSelectElement).value)
+  emit("update:selectedMailboxId", (event.target as HTMLSelectElement).value);
 }
 
 async function sendMessage() {
   if (!props.selectedMailboxId) {
-    sendError.value = 'Select a mailbox'
-    return
+    sendError.value = "Select a mailbox";
+    return;
   }
 
-  sending.value = true
-  sendError.value = ''
+  sending.value = true;
+  sendError.value = "";
   try {
-    await $fetch('/api/mail/send', {
-      method: 'POST',
+    await $fetch("/api/mail/send", {
+      method: "POST",
       body: {
         mailboxId: props.selectedMailboxId,
         to: to.value.trim(),
         subject: subject.value.trim(),
-        text: body.value
-      }
-    })
-    sent.value = true
-    to.value = ''
-    subject.value = ''
-    body.value = ''
-    emit('sent')
+        text: body.value,
+      },
+    });
+    sent.value = true;
+    to.value = "";
+    subject.value = "";
+    body.value = "";
+    emit("sent");
   } catch (cause: any) {
-    sendError.value = cause?.data?.statusMessage || cause?.message || 'Could not send the message'
+    sendError.value =
+      cause?.data?.statusMessage ||
+      cause?.message ||
+      "Could not send the message";
   } finally {
-    sending.value = false
+    sending.value = false;
   }
 }
 </script>
 
 <template>
-  <Teleport to='body'>
-    <div v-if='open' class='compose-backdrop' @mousedown.self='close'>
-      <section class='compose-dialog' role='dialog' aria-modal='true' aria-labelledby='compose-title'>
-        <header class='compose-header'>
+  <Teleport to="body">
+    <div v-if="open" class="compose-backdrop" @mousedown.self="close">
+      <section
+        class="compose-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="compose-title"
+      >
+        <header class="compose-header">
           <div>
-            <p class='compose-eyebrow'>New message</p>
-            <h2 id='compose-title'>Compose message</h2>
+            <p class="compose-eyebrow">New message</p>
+            <h2 id="compose-title">Compose message</h2>
           </div>
-          <button class='icon-button' type='button' title='Close' aria-label='Close' @click='close'>
-            <X :size='19' />
+          <button
+            class="icon-button"
+            type="button"
+            title="Close"
+            aria-label="Close"
+            @click="close"
+          >
+            <X :size="19" />
           </button>
         </header>
 
-        <div v-if='sent' class='sent-state' role='status'>
-          <span class='sent-icon'><Check :size='24' /></span>
+        <div v-if="sent" class="sent-state" role="status">
+          <span class="sent-icon"><Check :size="24" /></span>
           <strong>Message sent</strong>
-          <button class='secondary-button' type='button' @click='close'>Close</button>
+          <button class="secondary-button" type="button" @click="close">
+            Close
+          </button>
         </div>
 
-        <form v-else class='compose-form' @submit.prevent='sendMessage'>
-          <label class='field'>
-            <span class='field-label'>From</span>
+        <form v-else class="compose-form" @submit.prevent="sendMessage">
+          <label class="field">
+            <span class="field-label">From</span>
             <select
-              class='field-control'
-              :value='selectedMailboxId'
+              class="field-control"
+              :value="selectedMailboxId"
               required
-              @change='selectMailbox'
+              @change="selectMailbox"
             >
-              <option value='' disabled>Select a mailbox</option>
-              <option v-for='mailbox in mailboxes' :key='mailbox.id' :value='mailbox.id'>
+              <option value="" disabled>Select a mailbox</option>
+              <option
+                v-for="mailbox in mailboxes"
+                :key="mailbox.id"
+                :value="mailbox.id"
+              >
                 {{ mailbox.email }}
               </option>
             </select>
           </label>
 
-          <label class='field'>
-            <span class='field-label'>To</span>
-            <input ref='toInput' v-model='to' class='field-control' type='text' autocomplete='email' required placeholder='name@example.com'>
+          <label class="field">
+            <span class="field-label">To</span>
+            <input
+              ref="toInput"
+              v-model="to"
+              class="field-control"
+              type="text"
+              autocomplete="email"
+              required
+              placeholder="name@example.com"
+            />
           </label>
 
-          <label class='field'>
-            <span class='field-label'>Subject</span>
-            <input v-model='subject' class='field-control' type='text' maxlength='998' required placeholder='What is this message about?'>
+          <label class="field">
+            <span class="field-label">Subject</span>
+            <input
+              v-model="subject"
+              class="field-control"
+              type="text"
+              maxlength="998"
+              required
+              placeholder="What is this message about?"
+            />
           </label>
 
-          <label class='field'>
-            <span class='field-label'>Message</span>
-            <textarea v-model='body' class='field-control message-field' rows='10' required placeholder='Write your message' />
+          <label class="field">
+            <span class="field-label">Message</span>
+            <div
+              v-model="body"
+              class="field-control message-field contenteditable"
+              @input="body = $event.target.innerHTML"
+              required
+              placeholder="Write your message"
+              role="textbox"
+              aria-multiline="true"
+            ></div>
           </label>
 
-          <p v-if='sendError' class='error-message' role='alert'>{{ sendError }}</p>
+          <p v-if="sendError" class="error-message" role="alert">
+            {{ sendError }}
+          </p>
 
-          <footer class='compose-actions'>
-            <button class='secondary-button' type='button' :disabled='sending' @click='close'>Cancel</button>
-            <button class='primary-button' type='submit' :disabled='sending || !selectedMailboxId'>
-              <LoaderCircle v-if='sending' class='spin' :size='17' />
-              <Send v-else :size='17' />
-              {{ sending ? 'Sending' : 'Send' }}
+          <footer class="compose-actions">
+            <button
+              class="secondary-button"
+              type="button"
+              :disabled="sending"
+              @click="close"
+            >
+              Cancel
+            </button>
+            <button
+              class="primary-button"
+              type="submit"
+              :disabled="sending || !selectedMailboxId"
+            >
+              <LoaderCircle v-if="sending" class="spin" :size="17" />
+              <Send v-else :size="17" />
+              {{ sending ? "Sending" : "Send" }}
             </button>
           </footer>
         </form>
@@ -224,7 +283,9 @@ async function sendMessage() {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 640px) {
