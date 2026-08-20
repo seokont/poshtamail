@@ -156,10 +156,10 @@ async function sendMessage() {
           <label class="field">
             <span class="field-label">Message</span>
             <div
-@input="handleContentChange" required role=\"textbox\" aria-multiline=\"true\"></div>
-v-model:html="body" required role=\"textbox\" aria-multiline=\"true\"></div>
-<div class="field-control message-field contenteditable" @input="body = $event.target.innerHTML" required role=\"textbox\" aria-multiline=\"true\"></div>
-@input="handleContentChange" required role=\"textbox\" aria-multiline=\"true\"></div>
+@input="handleContentChange" required role="textbox" aria-multiline="true"></div>
+v-model:html="body" required role="textbox" aria-multiline="true"></div>
+<div class="field-control message-field contenteditable" @input="body = $event.target.innerHTML" required role="textbox" aria-multiline="true"></div>
+@input="handleContentChange" required role="textbox" aria-multiline="true"></div>
               v-model="body"
               class="field-control message-field contenteditable"
               @input="body = $event.target.innerHTML"
