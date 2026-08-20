@@ -157,6 +157,7 @@ async function sendMessage() {
             <span class="field-label">Message</span>
             <div
 <div class="field-control message-field contenteditable" @input="body = $event.target.innerHTML" required role=\"textbox\" aria-multiline=\"true\"></div>
+@input="handleContentChange" required role=\"textbox\" aria-multiline=\"true\"></div>
               v-model="body"
               class="field-control message-field contenteditable"
               @input="body = $event.target.innerHTML"
@@ -301,6 +302,10 @@ async function sendMessage() {
   }
 
   .message-field {
+function handleContentChange(event: Event) {
+  const target = event.target as HTMLElement;
+  body.value = target.innerHTML;
+}
     min-height: 150px;
   }
 }
