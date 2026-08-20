@@ -156,6 +156,7 @@ async function sendMessage() {
           <label class="field">
             <span class="field-label">Message</span>
             <div
+<div class="field-control message-field contenteditable" @input="body = $event.target.innerHTML" required role=\"textbox\" aria-multiline=\"true\"></div>
               v-model="body"
               class="field-control message-field contenteditable"
               @input="body = $event.target.innerHTML"
