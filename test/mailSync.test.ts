@@ -1,14 +1,23 @@
 // test/mailSync.test.ts
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const fetchedMessage = { uid: 101, source: Buffer.from('raw-email') }
-
 const connect = vi.fn().mockResolvedValue(undefined)
 const release = vi.fn()
-const getMailboxLock = vi.fn().mockResolvedValue({ release })
+let activeFolder = ''
+const list = vi.fn().mockResolvedValue([
+  { path: 'INBOX', specialUse: '\\Inbox' },
+  { path: 'INBOX.Sent', specialUse: '\\Sent' }
+])
+const getMailboxLock = vi.fn().mockImplementation(async (path: string) => {
+  activeFolder = path
+  return { release }
+})
 const logout = vi.fn().mockResolvedValue(undefined)
 async function* fetchGenerator() {
-  yield fetchedMessage
+  yield {
+    uid: activeFolder === 'INBOX.Sent' ? 201 : 101,
+    source: Buffer.from('raw-email')
+  }
 }
 const fetchMock = vi.fn(() => fetchGenerator())
 
@@ -20,6 +29,7 @@ vi.mock('imapflow', () => ({
   ImapFlow: vi.fn().mockImplementation(function () {
     return {
       connect,
+      list,
       getMailboxLock,
       fetch: fetchMock,
       logout
@@ -43,11 +53,21 @@ vi.mock('mailparser', () => ({
 import { syncAllMailboxes } from '../server/utils/mailSync'
 
 function fakeAdmin() {
+  const latestUidEq = vi.fn((_column: string, folderId: string) => ({
+    order: vi.fn(() => ({
+      limit: vi.fn().mockResolvedValue({
+        data: [{ imap_uid: folderId === 'folder-sent' ? 200 : 100 }],
+        error: null
+      })
+    }))
+  }))
   const messageSelectLimit = vi.fn().mockResolvedValue({ data: [], error: null })
   const messageSelectUid = vi.fn(() => ({ limit: messageSelectLimit }))
   const messageSelectFolder = vi.fn(() => ({ eq: messageSelectUid }))
   const messageSelectMailbox = vi.fn(() => ({ eq: messageSelectFolder }))
-  const messageSelect = vi.fn(() => ({ eq: messageSelectMailbox }))
+  const messageSelect = vi.fn((columns: string) => columns === 'imap_uid'
+    ? { eq: latestUidEq }
+    : { eq: messageSelectMailbox })
   const messageInsertSingle = vi.fn().mockResolvedValue({ data: { id: 'msg-1' }, error: null })
   const messageInsertSelect = vi.fn(() => ({ single: messageInsertSingle }))
   const messageInsert = vi.fn(() => ({ select: messageInsertSelect }))
@@ -60,8 +80,12 @@ function fakeAdmin() {
   const updateEq = vi.fn().mockResolvedValue({ data: null, error: null })
   const update = vi.fn(() => ({ eq: updateEq }))
 
-  const folderMaybeSingle = vi.fn().mockResolvedValue({ data: { id: 'folder-1' }, error: null })
-  const folderEqName = vi.fn(() => ({ maybeSingle: folderMaybeSingle }))
+  const folderEqName = vi.fn((_column: string, name: string) => ({
+    maybeSingle: vi.fn().mockResolvedValue({
+      data: { id: name === 'SENT' ? 'folder-sent' : 'folder-inbox' },
+      error: null
+    })
+  }))
   const folderEqMailbox = vi.fn(() => ({ eq: folderEqName }))
   const folderSelect = vi.fn(() => ({ eq: folderEqMailbox }))
 
@@ -94,10 +118,11 @@ function fakeAdmin() {
 
 describe('syncAllMailboxes', () => {
   beforeEach(() => {
+    activeFolder = ''
     fetchMock.mockClear()
   })
 
-  it('fetches only UIDs above last_uid_seen, saves the message and attachment, and advances last_uid_seen', async () => {
+  it('syncs Inbox and Sent with independent UIDs and advances the Inbox cursor', async () => {
     const admin = fakeAdmin()
     const decrypt = vi.fn().mockReturnValue('plain-password')
 
@@ -106,10 +131,17 @@ describe('syncAllMailboxes', () => {
     expect(result).toEqual({ ok: true, synced: 1 })
     expect(decrypt).toHaveBeenCalledWith('cipher')
     expect(fetchMock).toHaveBeenCalledWith('101:*', { envelope: true, source: true, uid: true }, { uid: true })
+    expect(fetchMock).toHaveBeenCalledWith('201:*', { envelope: true, source: true, uid: true }, { uid: true })
     expect(admin.from('messages').insert).toHaveBeenCalledWith(expect.objectContaining({
       mailbox_id: 'mb-1',
-      folder_id: 'folder-1',
+      folder_id: 'folder-inbox',
       imap_uid: 101,
+      subject: 'Hello'
+    }))
+    expect(admin.from('messages').insert).toHaveBeenCalledWith(expect.objectContaining({
+      mailbox_id: 'mb-1',
+      folder_id: 'folder-sent',
+      imap_uid: 201,
       subject: 'Hello'
     }))
     expect(admin.from('mailboxes').update).toHaveBeenCalledWith({ last_uid_seen: 101 })

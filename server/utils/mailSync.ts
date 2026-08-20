@@ -31,7 +31,7 @@ function getAttachmentName(filename: string | undefined, index: number): string 
   return `${index + 1}-${cleaned || fallback}`
 }
 
-async function saveMessage(
+export async function saveMessage(
   admin: SupabaseClient,
   values: Record<string, unknown>
 ): Promise<string> {
@@ -73,6 +73,74 @@ async function saveAttachment(
   if (saveErr) throw new Error(saveErr.message)
 }
 
+async function getLastFolderUid(admin: SupabaseClient, folderId: string): Promise<number> {
+  const { data, error } = await admin
+    .from('messages')
+    .select('imap_uid')
+    .eq('folder_id', folderId)
+    .order('imap_uid', { ascending: false })
+    .limit(1)
+  if (error) throw new Error(error.message)
+  return Number(data?.[0]?.imap_uid || 0)
+}
+
+async function syncFolder(
+  admin: SupabaseClient,
+  client: ImapFlow,
+  mailbox: SyncableMailbox,
+  remotePath: string,
+  localName: 'INBOX' | 'SENT'
+): Promise<number> {
+  const folderId = await ensureFolderId(admin, mailbox.id, localName)
+  const lastUid = await getLastFolderUid(admin, folderId)
+  let maxUid = lastUid
+  const lock = await client.getMailboxLock(remotePath)
+
+  try {
+    for await (const msg of client.fetch(`${lastUid + 1}:*`, { envelope: true, source: true, uid: true }, { uid: true })) {
+      if (msg.uid <= lastUid || !msg.source) continue
+      const parsed = await simpleParser(msg.source)
+
+      const messageId = await saveMessage(admin, {
+        mailbox_id: mailbox.id,
+        folder_id: folderId,
+        imap_uid: msg.uid,
+        message_id: parsed.messageId,
+        from_addr: parsed.from?.text,
+        to_addrs: getRecipientAddresses(parsed.to),
+        subject: parsed.subject,
+        body_text: parsed.text,
+        body_html: parsed.html || null,
+        received_at: parsed.date
+      })
+
+      for (const [index, att] of (parsed.attachments ?? []).entries()) {
+        const filename = getAttachmentName(att.filename, index)
+        const path = `${mailbox.id}/${folderId}/${msg.uid}/${filename}`
+        const { error: uploadErr } = await admin.storage.from('attachments').upload(path, att.content, {
+          contentType: att.contentType,
+          upsert: true
+        })
+        if (uploadErr) throw new Error(uploadErr.message)
+
+        await saveAttachment(admin, {
+          message_id: messageId,
+          filename: att.filename || filename,
+          content_type: att.contentType,
+          storage_path: path,
+          size_bytes: att.size
+        })
+      }
+
+      maxUid = Math.max(maxUid, msg.uid)
+    }
+  } finally {
+    lock.release()
+  }
+
+  return maxUid
+}
+
 export async function syncAllMailboxes(
   admin: SupabaseClient,
   decrypt: (payload: string) => string
@@ -96,65 +164,18 @@ export async function syncMailbox(
   await client.connect()
 
   try {
-    const lock = await client.getMailboxLock('INBOX')
-
-    try {
-      const folderId = await ensureFolderId(admin, mailbox.id, 'INBOX')
-      const uidRange = `${mailbox.last_uid_seen + 1}:*`
-      let maxUid = mailbox.last_uid_seen
-
-      for await (const msg of client.fetch(uidRange, { envelope: true, source: true, uid: true }, { uid: true })) {
-        if (msg.uid <= mailbox.last_uid_seen) continue
-        // ImapFlow types `source` as possibly undefined even though the
-        // fetch query above requested `source: true`; skip defensively
-        // rather than pass undefined into simpleParser.
-        if (!msg.source) continue
-        const parsed = await simpleParser(msg.source)
-
-        const messageId = await saveMessage(admin, {
-          mailbox_id: mailbox.id,
-          folder_id: folderId,
-          imap_uid: msg.uid,
-          message_id: parsed.messageId,
-          from_addr: parsed.from?.text,
-          to_addrs: getRecipientAddresses(parsed.to),
-          subject: parsed.subject,
-          body_text: parsed.text,
-          body_html: parsed.html || null,
-          received_at: parsed.date
-        })
-
-        for (const [index, att] of (parsed.attachments ?? []).entries()) {
-          const filename = getAttachmentName(att.filename, index)
-          const path = `${mailbox.id}/${msg.uid}/${filename}`
-          const { error: uploadErr } = await admin.storage.from('attachments').upload(path, att.content, {
-            contentType: att.contentType,
-            upsert: true
-          })
-          if (uploadErr) throw new Error(uploadErr.message)
-
-          await saveAttachment(admin, {
-            message_id: messageId,
-            filename: att.filename || filename,
-            content_type: att.contentType,
-            storage_path: path,
-            size_bytes: att.size
-          })
-        }
-
-        maxUid = Math.max(maxUid, msg.uid)
-      }
-
-      if (maxUid > mailbox.last_uid_seen) {
-        const { error: updateErr } = await admin
-          .from('mailboxes')
-          .update({ last_uid_seen: maxUid })
-          .eq('id', mailbox.id)
-        if (updateErr) throw new Error(updateErr.message)
-      }
-    } finally {
-      lock.release()
+    const folders = await client.list()
+    const inboxMaxUid = await syncFolder(admin, client, mailbox, 'INBOX', 'INBOX')
+    if (inboxMaxUid > mailbox.last_uid_seen) {
+      const { error: updateErr } = await admin
+        .from('mailboxes')
+        .update({ last_uid_seen: inboxMaxUid })
+        .eq('id', mailbox.id)
+      if (updateErr) throw new Error(updateErr.message)
     }
+
+    const sentFolder = folders.find(folder => folder.specialUse === '\\Sent')
+    if (sentFolder) await syncFolder(admin, client, mailbox, sentFolder.path, 'SENT')
   } finally {
     await client.logout()
   }

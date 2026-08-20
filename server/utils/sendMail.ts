@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { assertMailboxAccess } from './mailboxAccess'
 import { decrypt } from './crypto'
+import { saveSentCopy, type SentCopyMailbox } from './sentCopy'
 
 export interface SendMailParams {
   mailboxId: string
@@ -12,18 +13,20 @@ export interface SendMailParams {
 }
 
 export type TransporterFactory = typeof nodemailer.createTransport
+export type SentCopySaver = typeof saveSentCopy
 
 export async function sendMailForUser(
   admin: SupabaseClient,
   userId: string,
   params: SendMailParams,
-  createTransport: TransporterFactory = nodemailer.createTransport
+  createTransport: TransporterFactory = nodemailer.createTransport,
+  saveCopy: SentCopySaver = saveSentCopy
 ): Promise<{ ok: true }> {
   await assertMailboxAccess(admin, userId, params.mailboxId)
 
   const { data: mailbox, error } = await admin
     .from('mailboxes')
-    .select('email, smtp_host, smtp_port, smtp_password_encrypted')
+    .select('id, email, imap_host, imap_port, smtp_host, smtp_port, imap_password_encrypted, smtp_password_encrypted')
     .eq('id', params.mailboxId)
     .single()
   if (error || !mailbox) {
@@ -42,13 +45,25 @@ export async function sendMailForUser(
     }
   })
 
-  await transporter.sendMail({
+  const sent = await transporter.sendMail({
     from: mailbox.email,
     to: params.to,
     subject: params.subject,
     text: params.text,
     html: params.html
   })
+
+  try {
+    await saveCopy(admin, mailbox as SentCopyMailbox, {
+      to: params.to,
+      subject: params.subject,
+      text: params.text,
+      html: params.html,
+      messageId: sent.messageId
+    })
+  } catch (cause) {
+    console.error('Message sent, but its Sent copy could not be saved', cause)
+  }
 
   return { ok: true }
 }

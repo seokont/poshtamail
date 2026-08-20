@@ -70,7 +70,10 @@ export async function trashMailForUser(
       trashPath = (await client.mailboxCreate(trashPath)).path
     }
 
-    const lock = await client.getMailboxLock(folder.name)
+    const sourcePath = folder.name === 'SENT'
+      ? folders.find(item => item.specialUse === '\\Sent')?.path || folder.name
+      : folder.name
+    const lock = await client.getMailboxLock(sourcePath)
     try {
       const moved = await client.messageMove([sourceUid], trashPath, { uid: true })
       destinationUid = moved && moved.uidMap?.get(sourceUid) || sourceUid
@@ -81,7 +84,7 @@ export async function trashMailForUser(
     await client.logout()
   }
 
-  const trashFolderId = await ensureFolderId(admin, message.mailbox_id, trashPath)
+  const trashFolderId = await ensureFolderId(admin, message.mailbox_id, 'TRASH')
   const { error: updateErr } = await admin
     .from('messages')
     .update({ folder_id: trashFolderId, imap_uid: destinationUid, is_read: true })

@@ -1,5 +1,5 @@
 <script setup lang='ts'>
-import { Inbox, LogOut, Mail, PencilLine, UserRound } from '@lucide/vue'
+import { Inbox, LogOut, Mail, PencilLine, Send, UserRound } from '@lucide/vue'
 
 const route = useRoute()
 const user = useSupabaseUser()
@@ -11,10 +11,11 @@ const signingOut = ref(false)
 const activeMailbox = computed(() => mailboxes.value.find(mailbox => mailbox.id === selectedMailboxId.value))
 const accountLabel = computed(() => user.value?.email || 'User')
 const isInbox = computed(() => route.path === '/')
+const isSent = computed(() => route.path === '/sent')
 
 async function chooseMailbox(mailboxId: string) {
   selectedMailboxId.value = mailboxId
-  if (!isInbox.value) await navigateTo('/')
+  if (!isInbox.value && !isSent.value) await navigateTo('/')
 }
 
 async function signOut() {
@@ -45,6 +46,10 @@ async function signOut() {
         <NuxtLink to='/' :class='{ active: isInbox }'>
           <Inbox :size='18' />
           <span>Inbox</span>
+        </NuxtLink>
+        <NuxtLink to='/sent' :class='{ active: isSent }'>
+          <Send :size='18' />
+          <span>Sent</span>
         </NuxtLink>
       </nav>
 
@@ -95,6 +100,10 @@ async function signOut() {
       <NuxtLink to='/' :class='{ active: isInbox }'>
         <Inbox :size='20' />
         <span>Inbox</span>
+      </NuxtLink>
+      <NuxtLink to='/sent' :class='{ active: isSent }'>
+        <Send :size='20' />
+        <span>Sent</span>
       </NuxtLink>
       <button type='button' class='mobile-compose' @click='composeOpen = true'>
         <PencilLine :size='21' />
@@ -356,7 +365,7 @@ async function signOut() {
     left: 0;
     height: 64px;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     border-top: 1px solid var(--border);
     background: rgba(255, 255, 255, 0.96);
   }

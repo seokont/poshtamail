@@ -11,6 +11,7 @@ interface MessageDetail {
   body_html: string | null
   body_text: string | null
   received_at: string | null
+  folders?: Array<{ name: string }> | null
 }
 
 interface AttachmentSummary {
@@ -27,7 +28,7 @@ const messageId = String(route.params.id)
 const { data: message, pending, error } = await useAsyncData<MessageDetail | null>('message-' + messageId, async () => {
   const { data, error: fetchError } = await supabase
     .from('messages')
-    .select('id, mailbox_id, from_addr, to_addrs, subject, body_html, body_text, received_at')
+    .select('id, mailbox_id, from_addr, to_addrs, subject, body_html, body_text, received_at, folders(name)')
     .eq('id', messageId)
     .single()
   if (fetchError) throw fetchError
@@ -61,6 +62,7 @@ const sanitizedBodyHtml = computed(() => {
     }
   })
 })
+const isSent = computed(() => message.value?.folders?.some(folder => folder.name === 'SENT') === true)
 
 const replying = ref(false)
 const replyTo = ref('')
@@ -176,7 +178,7 @@ function attachmentUrl(attachmentId: string) {
           <Trash2 v-else :size='17' />
           {{ deleting ? 'Moving' : 'Delete' }}
         </button>
-        <button class='secondary-button' type='button' aria-label='Reply' :disabled='deleting' @click='startReply'>
+        <button v-if='!isSent' class='secondary-button' type='button' aria-label='Reply' :disabled='deleting' @click='startReply'>
           <Reply :size='17' />
           Reply
         </button>
@@ -199,7 +201,7 @@ function attachmentUrl(attachmentId: string) {
 
     <article v-else-if='message' class='message-content'>
       <header class='message-heading'>
-        <p class='message-label'><MailOpen :size='15' /> Incoming message</p>
+        <p class='message-label'><MailOpen :size='15' /> {{ isSent ? 'Sent message' : 'Incoming message' }}</p>
         <h1>{{ message.subject || '(no subject)' }}</h1>
 
         <div class='sender-meta'>

@@ -15,9 +15,13 @@ function fakeAdmin(opts: { hasAccess: boolean; smtpPasswordEncrypted: string }) 
 
   const mailboxSingle = vi.fn().mockResolvedValue({
     data: {
+      id: 'mb-1',
       email: 'inbox1@example.com',
+      imap_host: 'imap.example.com',
+      imap_port: 993,
       smtp_host: 'smtp.example.com',
       smtp_port: 465,
+      imap_password_encrypted: opts.smtpPasswordEncrypted,
       smtp_password_encrypted: opts.smtpPasswordEncrypted
     },
     error: null
@@ -47,14 +51,16 @@ describe('sendMailForUser', () => {
 
   it('sends mail through nodemailer using the decrypted SMTP password', async () => {
     const admin = fakeAdmin({ hasAccess: true, smtpPasswordEncrypted: encrypt('smtp-secret') })
-    const sendMail = vi.fn().mockResolvedValue({})
+    const sendMail = vi.fn().mockResolvedValue({ messageId: '<sent@example.com>' })
     const createTransport = vi.fn().mockReturnValue({ sendMail })
+    const saveCopy = vi.fn().mockResolvedValue({ saved: true })
 
     const result = await sendMailForUser(
       admin,
       'user-1',
       { mailboxId: 'mb-1', to: 'x@y.com', subject: 'Hi', text: 'body' },
-      createTransport as any
+      createTransport as any,
+      saveCopy as any
     )
 
     expect(result).toEqual({ ok: true })
@@ -68,6 +74,11 @@ describe('sendMailForUser', () => {
     )
     expect(sendMail).toHaveBeenCalledWith(
       expect.objectContaining({ from: 'inbox1@example.com', to: 'x@y.com', subject: 'Hi', text: 'body' })
+    )
+    expect(saveCopy).toHaveBeenCalledWith(
+      admin,
+      expect.objectContaining({ id: 'mb-1', email: 'inbox1@example.com' }),
+      expect.objectContaining({ to: 'x@y.com', subject: 'Hi', messageId: '<sent@example.com>' })
     )
   })
 })
