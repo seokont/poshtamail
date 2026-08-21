@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Check, LoaderCircle, Send, X, Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, List, ListOrdered } from "@lucide/vue";
+import type { MailboxSummary } from "~/composables/useMailboxes";
 import { Check, LoaderCircle, Send, X } from "@lucide/vue";
 import type { MailboxSummary } from "~/composables/useMailboxes";
 
@@ -18,6 +20,8 @@ const to = ref("");
 const subject = ref("");
 const body = ref("");
 const sending = ref(false);
+const toInput = ref<HTMLInputElement | null>(null);
+const showToolbar = ref(true); // Панель форматирования по умолчанию видима
 const sendError = ref("");
 const sent = ref(false);
 const toInput = ref<HTMLInputElement | null>(null);
@@ -34,6 +38,34 @@ watch(
 );
 
 function close() {
+function close() {
+  if (!sending.value) emit("close");
+}
+
+function toggleToolbar() {
+  showToolbar.value = !showToolbar.value;
+}
+
+function selectMailbox(event: Event) {
+  emit("update:selectedMailboxId", (event.target as HTMLSelectElement).value);
+}
+
+/**
+ * Выполняет форматирование в contenteditable элементе через document.execCommand
+ */
+function format(command: string, value?: string) {
+  const editor = document.querySelector(".message-field");
+  if (!editor) return;
+  
+  editor.focus();
+  const selection = window.getSelection();
+  if (!selection) return;
+  
+  selection.collapse(false);
+  document.execCommand(command, false, value);
+  
+  onBodyInput(new Event("input"));
+}
   if (!sending.value) emit("close");
 }
 
@@ -155,6 +187,50 @@ async function sendMessage() {
               required
               placeholder="What is this message about?"
             />
+
+            <!-- Панель форматирования текста -->
+            <div v-if="showToolbar && !sending" class="formatting-toolbar">
+              <button type="button" @click="toggleToolbar" title="Hide/Show toolbar">
+                <Bold :size="14" style="opacity: 0.5; margin-right: 4px;" />
+              </button>
+
+              <span style="width: 1px; height: 20px; background: var(--border); margin: 0 4px;"></span>
+
+              <button type="button" @click="format('bold')" title="Bold">
+                <Bold :size="14" class="tb-bold" />
+              </button>
+              <button type="button" @click="format('italic')" title="Italic">
+                <Italic :size="14" class="tb-italic" />
+              </button>
+              <button type="button" @click="format('underline')" title="Underline">
+                <Underline :size="14" class="tb-underline" />
+              </button>
+              <button type="button" @click="format('strikethrough')" title="Strikethrough">
+                <Strikethrough :size="14" class="tb-strike" />
+              </button>
+
+              <span style="width: 1px; height: 20px; background: var(--border); margin: 0 4px;"></span>
+
+              <button type="button" @click="format('left')" title="Align Left">
+                <AlignLeft :size="14" />
+              </button>
+              <button type="button" @click="format('center')" title="Center">
+                <AlignCenter :size="14" />
+              </button>
+              <button type="button" @click="format('right')" title="Align Right">
+                <AlignRight :size="14" />
+              </button>
+
+              <span style="width: 1px; height: 20px; background: var(--border); margin: 0 4px;"></span>
+
+              <button type="button" @click="format('insertList')" title="Numbered list">
+                <ListOrdered :size="14" />
+              </button>
+              <button type="button" @click="format('insertOrderedList')" title="Bulleted list">
+                <List :size="14" />
+              </button>
+            </div>
+
           </label>
 
           <label class="field">
