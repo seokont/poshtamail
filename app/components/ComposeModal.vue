@@ -41,6 +41,10 @@ function selectMailbox(event: Event) {
   emit("update:selectedMailboxId", (event.target as HTMLSelectElement).value);
 }
 
+function onBodyInput(event: Event) {
+  body.value = (event.target as HTMLElement).innerHTML;
+}
+
 async function sendMessage() {
   if (!props.selectedMailboxId) {
     sendError.value = "Select a mailbox";
@@ -56,7 +60,7 @@ async function sendMessage() {
         mailboxId: props.selectedMailboxId,
         to: to.value.trim(),
         subject: subject.value.trim(),
-        text: body.value,
+        html: body.value,
       },
     });
     sent.value = true;
@@ -156,13 +160,9 @@ async function sendMessage() {
           <label class="field">
             <span class="field-label">Message</span>
             <div
-@input="handleContentChange" required role="textbox" aria-multiline="true"></div>
-v-model:html="body" required role="textbox" aria-multiline="true"></div>
-<div class="field-control message-field contenteditable" @input="body = $event.target.innerHTML" required role="textbox" aria-multiline="true"></div>
-@input="handleContentChange" required role="textbox" aria-multiline="true"></div>
-              v-model="body"
               class="field-control message-field contenteditable"
-              @input="body = $event.target.innerHTML"
+              contenteditable="true"
+              @input="onBodyInput"
               required
               placeholder="Write your message"
               role="textbox"
@@ -302,21 +302,8 @@ v-model:html="body" required role="textbox" aria-multiline="true"></div>
     max-height: calc(100dvh - 22px);
     border-radius: 8px 8px 0 0;
   }
-function handleContentChange(event: Event) {
-  const target = event.target as HTMLElement;
-  body.value = target.innerHTML;
-}
 
-// handleContentChange method is no longer needed due to v-model:html directive
-// function handleContentChange(event: Event) {
-//   const target = event.target as HTMLElement;
-//   body.value = target.innerHTML;
-// }
   .message-field {
-function handleContentChange(event: Event) {
-  const target = event.target as HTMLElement;
-  body.value = target.innerHTML;
-}
     min-height: 150px;
   }
 }
