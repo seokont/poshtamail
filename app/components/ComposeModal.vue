@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { Check, LoaderCircle, Send, X, Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter, AlignRight, List, ListOrdered } from "@lucide/vue";
 import type { MailboxSummary } from "~/composables/useMailboxes";
-import { Check, LoaderCircle, Send, X } from "@lucide/vue";
-import type { MailboxSummary } from "~/composables/useMailboxes";
 
 const props = defineProps<{
   open: boolean;
@@ -20,11 +18,10 @@ const to = ref("");
 const subject = ref("");
 const body = ref("");
 const sending = ref(false);
-const toInput = ref<HTMLInputElement | null>(null);
-const showToolbar = ref(true); // Панель форматирования по умолчанию видима
 const sendError = ref("");
 const sent = ref(false);
 const toInput = ref<HTMLInputElement | null>(null);
+const showToolbar = ref(true); // Панель форматирования по умолчанию видима
 
 watch(
   () => props.open,
@@ -37,7 +34,6 @@ watch(
   },
 );
 
-function close() {
 function close() {
   if (!sending.value) emit("close");
 }
@@ -65,12 +61,6 @@ function format(command: string, value?: string) {
   document.execCommand(command, false, value);
   
   onBodyInput(new Event("input"));
-}
-  if (!sending.value) emit("close");
-}
-
-function selectMailbox(event: Event) {
-  emit("update:selectedMailboxId", (event.target as HTMLSelectElement).value);
 }
 
 function onBodyInput(event: Event) {
@@ -382,5 +372,51 @@ async function sendMessage() {
   .message-field {
     min-height: 150px;
   }
+}
+
+/* Панель форматирования */
+.formatting-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px 6px 0 0;
+  border-top-color: var(--primary);
+}
+
+.formatting-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s ease;
+}
+
+.formatting-toolbar button:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.tb-bold {
+  font-weight: 700 !important;
+}
+
+.tb-italic {
+  font-style: italic !important;
+}
+
+.tb-underline {
+  text-decoration: underline !important;
+}
+
+.tb-strike {
+  text-decoration: line-through !important;
 }
 </style>
