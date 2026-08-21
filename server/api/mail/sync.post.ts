@@ -24,6 +24,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Mailbox not found' })
   }
 
-  await syncMailbox(admin, mailbox as SyncableMailbox, decrypt)
-  return { ok: true }
+  try {
+    await syncMailbox(admin, mailbox as SyncableMailbox, decrypt)
+    return { ok: true }
+  } catch (cause: any) {
+    console.error(`[sync:mail] failed for mailbox ${mailboxId}:`, cause)
+    throw createError({
+      statusCode: 502,
+      statusMessage: cause?.message || 'Could not sync the mailbox'
+    })
+  }
 })
